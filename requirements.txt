@@ -1,0 +1,5 @@
+matplotlib==3.10.3
+mwrogue==0.1.5
+numpy==2.2.6
+requests==2.32.3
+scikit-learn==1.6.1
