@@ -14,7 +14,8 @@ from numpy import array
 
 # Definitions
 HISTORY_LENGTH = 10     # Number of past matches to consider for team statistics
-OUTPUT_NAME = "data/match_data.csv"
+PLAYERS_PER_TEAM = 5
+OUTPUT_NAME = f"data/{datetime.now().strftime('%y%m%d_%H%M%S')}-match_data.csv"
 
 
 def main():
@@ -30,13 +31,14 @@ def main():
     print("Collecting match data for the following tournaments:")
     print(tournaments)
 
-    get_matches(
+    n = get_matches(
         client,
         tournaments,
     )
 
     end_time = time()
-    print(f"Data collection completed in {end_time - start_time:.2f} seconds.")
+    print(f"Collected {n} matches in {(end_time - start_time)/60:.2f} minutes.")
+    print(f"Data written to {OUTPUT_NAME}.")
 
 
 def get_tournaments(client: EsportsClient, region: str = None, limit: int = 500) -> array:
@@ -65,34 +67,41 @@ def get_tournaments(client: EsportsClient, region: str = None, limit: int = 500)
     return array([t['Name'] for t in data])
 
 
-def get_matches(client: EsportsClient, tournaments: list[str]) -> None:
+def get_matches(client: EsportsClient, tournaments: list[str]) -> int:
     """
     Fetches matches for the given tournaments and collects team statistics.
     :param client: EsportsClient instance to interact with the API.
     :param tournaments: List of tournament names to fetch matches for.
     :return: List of match data with team statistics.
     """
+    count = 0
     for tournament in tournaments:
         data = []
-        print(f"Fetching matches for tournament: {tournament}")
         matches = get_tournament_matches(client, tournament)
         print(f"Found {len(matches)} matches for tournament: {tournament}")
         for m in matches:
-            sleep(2)    # Rate limiting to avoid hitting API limits
-            print("+-----------------------------------------------------------------+")
-
             team_1 = m['Team1']
             team_2 = m['Team2']
             match_datetime = m['DateTime UTC']
 
+            print("+-----------------------------------------------------------------+")
             print(f"Processing match: {team_1} vs {team_2} at {match_datetime}")
             try:
+                sleep(2)    # Rate limiting to avoid hitting API limits
                 team_1_stats = get_team_stats(client, team_1, match_datetime)
                 team_2_stats = get_team_stats(client, team_2, match_datetime)
+                sleep(2)    # Rate limiting to avoid hitting API limits
+                team_1_player_stats = get_player_stats(client, team_1, match_datetime)
+                team_2_player_stats = get_player_stats(client, team_2, match_datetime)
             except Exception as e:
                 print(f"Error fetching stats for match {team_1} vs {team_2}: {e}")
                 continue
-            if len(team_1_stats) == 0 or len(team_2_stats) == 0:
+            if (
+                len(team_1_stats) == 0 or
+                len(team_2_stats) == 0 or
+                len(team_1_player_stats) == 0 or
+                len(team_2_player_stats) == 0
+            ):
                 print(f"Skipping match {team_1} vs {team_2} due to missing stats.")
                 continue
 
@@ -108,15 +117,23 @@ def get_matches(client: EsportsClient, tournaments: list[str]) -> None:
                 match_data[f'Team1_{stat}'] = val
             for stat, val in team_2_stats.items():
                 match_data[f'Team2_{stat}'] = val
+            for stat, val in team_1_player_stats.items():
+                match_data[f'Team1_{stat}'] = val
+            for stat, val in team_2_player_stats.items():
+                match_data[f'Team2_{stat}'] = val
+
             data.append(match_data)
 
-            print(f"\nTeam 1 stats in past {HISTORY_LENGTH} games:\n{team_1_stats}\n")
+            print(f"\nTeam 1 stats in past {HISTORY_LENGTH} games:\n{team_1_stats}")
+            print(f"\tPlayer stats:\n{team_1_player_stats}\n")
             print(f"Team 2 stats in past {HISTORY_LENGTH} games:\n{team_2_stats}")
+            print(f"\tPlayer stats:\n{team_2_player_stats}\n")
 
-        print(f"Finished processing {len(matches)} matches for tournament: {tournament}")
+        count += len(matches)
+        print(f"Finished processing {count} matches for tournament: {tournament}")
         write_to_csv(data)
 
-    pass
+    return count
 
 
 def get_tournament_matches(client: EsportsClient, tournament: str) -> array:
@@ -143,23 +160,20 @@ def get_team_stats(client: EsportsClient, team_name: str, match_datetime: str) -
     :param match_datetime: The datetime of the match to consider as the cutoff for historical data.
     :return: Array of statistics for the team in the last HISTORY_LENGTH matches.
     """
-    # change match_datetime to 6 hours before the match
-    match_datetime = datetime.strptime(match_datetime, "%Y-%m-%d %H:%M:%S")
-    match_datetime = match_datetime.strftime("%Y-%m-%d %H:%M:%S")
-    match_datetime = datetime.strptime(match_datetime, "%Y-%m-%d %H:%M:%S") - timedelta(hours=6)
-    match_datetime = match_datetime.strftime("%Y-%m-%d %H:%M:%S")
+    match_datetime = offset_datetime(match_datetime).strftime("%Y-%m-%d %H:%M:%S")
+    team_name = team_name.replace("'", "''")  # Escape single quotes for SQL
     data = client.cargo_client.query(
         tables="MatchSchedule=MS, ScoreboardGames=SG",
         join_on="MS.MatchId=SG.MatchId",
         fields=
-            "MS.DateTime_UTC, SG.Tournament, MS.MatchId, SG.Gamelength_Number, SG.WinTeam, "
+            "SG.DateTime_UTC, SG.Tournament, MS.MatchId, SG.Gamelength_Number, SG.WinTeam, "
             "MS.Team1, MS.Team2, SG.Team1Players, SG.Team2Players, "
             "SG.Team1Gold, SG.Team2Gold, SG.Team1Kills, SG.Team2Kills, "
             "SG.Team1Towers, SG.Team2Towers, SG.Team1Inhibitors, SG.Team2Inhibitors, "
             "SG.Team1Dragons, SG.Team2Dragons, SG.Team1Barons, SG.Team2Barons, "
             "SG.Team1RiftHeralds, SG.Team2RiftHeralds, SG.Team1VoidGrubs, SG.Team2VoidGrubs",
         where=f"(MS.Team1='{team_name}' OR MS.Team2='{team_name}') AND MS.DateTime_UTC < '{match_datetime}'",
-        order_by="MS.DateTime_UTC DESC",
+        order_by="SG.DateTime_UTC DESC",
         limit=HISTORY_LENGTH,
     )
 
@@ -198,21 +212,77 @@ def get_team_stats(client: EsportsClient, team_name: str, match_datetime: str) -
     return averages
 
 
-def get_player_stats(client: EsportsClient, player_name: str, match_datetime: str) -> dict:
+def get_player_stats(client: EsportsClient, team_name: str, match_datetime: str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")) -> dict:
     """
     Fetches the last HISTORY_LENGTH matches for a given player and calculates statistics.
     :param client: EsportsClient instance to interact with the API.
-    :param player_name: Name of the player to fetch statistics for.
+    :param team_name: Name of the team to fetch statistics for.
     :param match_datetime: The datetime of the match to consider as the cutoff for historical data.
     :return: Dictionary of statistics for the player in the last HISTORY_LENGTH matches.
     """
-    # TODO: implement ...
-    pass
+    match_datetime = offset_datetime(match_datetime).strftime("%Y-%m-%d %H:%M:%S")
+    team_name = team_name.replace("'", "''")  # Escape single quotes for SQL
+    data = client.cargo_client.query(
+        tables="MatchSchedule=MS, ScoreboardPlayers=SP",
+        join_on="MS.MatchId=SP.MatchId",
+        fields=
+            "SP.DateTime_UTC, SP.Tournament, MS.MatchId, "
+            "SP.Team, SP.Name, SP.Role, "
+            "SP.Kills, SP.Deaths, SP.Assists, "
+            "SP.Gold, SP.CS, SP.DamageToChampions",
+        where=
+            f"(MS.Team1='{team_name}' OR MS.Team2='{team_name}') AND "
+            f"MS.DateTime_UTC < '{match_datetime}' AND "
+            f"SP.Team='{team_name}'",
+        order_by="SP.DateTime_UTC DESC",
+        limit=HISTORY_LENGTH*5,
+    )
+
+    stats = {}
+    for match in data:
+        role = match['Role']
+
+        stats[f"{role}_count"] = stats.get(f"{role}_count", 0) + 1
+        stats[f"{role}_kills"] = stats.get(f"{role}_kills", 0) + get_stat(match, 'Kills', int)
+        stats[f"{role}_deaths"] = stats.get(f"{role}_deaths", 0) + get_stat(match, 'Deaths', int)
+        stats[f"{role}_assists"] = stats.get(f"{role}_assists", 0) + get_stat(match, 'Assists', int)
+        stats[f"{role}_gold"] = stats.get(f"{role}_gold", 0) + get_stat(match, 'Gold', int)
+        stats[f"{role}_cs"] = stats.get(f"{role}_cs", 0) + get_stat(match, 'CS', int)
+        stats[f"{role}_dmg"] = stats.get(f"{role}_dmg", 0) + get_stat(match, 'DamageToChampions', int)
+
+    # Verify data
+    roles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
+    for k, v in stats.items():
+        role, stat = k.split('_')
+        if role not in roles:
+            return {}
+        if stat == 'count' and v != HISTORY_LENGTH:
+            print(f"Warning: Incomplete data for role '{role}' in team '{team_name}'. Expected {HISTORY_LENGTH} matches, got {v}.")
+            return {}
+    for role in roles:
+        del stats[f"{role}_count"]
+
+    # Calculate averages
+    averages = {k: v / HISTORY_LENGTH for k, v in stats.items()}
+
+    return averages
 
 
 def get_stat(match: dict, stat: str, cast: Callable, fallback: float = 0.0):
     stat = match.get(stat)
     return cast(stat) if stat is not None else fallback
+
+
+def offset_datetime(dt: str, hours: int = -6) -> datetime:
+    """
+    Offsets a datetime string by a specified number of hours.
+    :param dt: Datetime string in the format "YYYY-MM-DD HH:MM:SS".
+    :param hours: Number of hours to offset (default is -6).
+    :return: Offset datetime string in the same format.
+    """
+    dt = datetime.strptime(dt, "%Y-%m-%d %H:%M:%S")
+    dt += timedelta(hours=hours)
+    return dt
 
 
 def write_to_csv(data: list[dict]) -> None:
@@ -225,15 +295,14 @@ def write_to_csv(data: list[dict]) -> None:
         return
 
     # check if the output directory exists, if not create it
-    exists = os.path.exists(os.path.dirname(OUTPUT_NAME))
-    if not exists:
+    if not os.path.exists(os.path.dirname(OUTPUT_NAME)):
         os.makedirs(os.path.dirname(OUTPUT_NAME))
 
     with open(OUTPUT_NAME, 'a', newline='') as csvfile:
         fieldnames = data[0].keys()
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-        if not exists:
+        if os.path.getsize(OUTPUT_NAME) == 0:
             writer.writeheader()
 
         for row in data:
