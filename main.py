@@ -11,11 +11,16 @@ from data_processor import DataProcessor
 
 def main():
     print("skill issue ...")
+
     data_files = [
         "data/match-data.csv",
     ]
     data = DataProcessor(data_files)
-    print(data.x)
+
+    print("Data loaded and processed.", end='\n\n')
+    print("Features (x):", data.x.shape)
+    print(data.x, end='\n\n')
+    print("Outcomes (y):", data.y.shape)
     print(data.y)
 
 
