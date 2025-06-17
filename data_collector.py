@@ -87,22 +87,24 @@ def get_matches(client: EsportsClient, tournaments: list[str]) -> int:
             print("+-----------------------------------------------------------------+")
             print(f"Processing match: {team_1} vs {team_2} at {match_datetime}")
             try:
+                # Fetch team stats
                 sleep(2)    # Rate limiting to avoid hitting API limits
                 team_1_stats = get_team_stats(client, team_1, match_datetime)
                 team_2_stats = get_team_stats(client, team_2, match_datetime)
+                if len(team_1_stats) == 0 or len(team_2_stats) == 0:
+                    print(f"Skipping match {team_1} vs {team_2} due to missing team stats.")
+                    continue
+
+                # Fetch player stats
                 sleep(2)    # Rate limiting to avoid hitting API limits
                 team_1_player_stats = get_player_stats(client, team_1, match_datetime)
                 team_2_player_stats = get_player_stats(client, team_2, match_datetime)
+                if len(team_1_player_stats) == 0 or len(team_2_player_stats) == 0:
+                    print(f"Skipping match {team_1} vs {team_2} due to missing player stats.")
+                    continue
+
             except Exception as e:
                 print(f"Error fetching stats for match {team_1} vs {team_2}: {e}")
-                continue
-            if (
-                len(team_1_stats) == 0 or
-                len(team_2_stats) == 0 or
-                len(team_1_player_stats) == 0 or
-                len(team_2_player_stats) == 0
-            ):
-                print(f"Skipping match {team_1} vs {team_2} due to missing stats.")
                 continue
 
             match_data = {
@@ -166,13 +168,14 @@ def get_team_stats(client: EsportsClient, team_name: str, match_datetime: str) -
         tables="MatchSchedule=MS, ScoreboardGames=SG",
         join_on="MS.MatchId=SG.MatchId",
         fields=
-            "SG.DateTime_UTC, SG.Tournament, MS.MatchId, SG.Gamelength_Number, SG.WinTeam, "
-            "MS.Team1, MS.Team2, SG.Team1Players, SG.Team2Players, "
+            "SG.Gamelength_Number, SG.WinTeam, MS.Team1, MS.Team2, "
             "SG.Team1Gold, SG.Team2Gold, SG.Team1Kills, SG.Team2Kills, "
             "SG.Team1Towers, SG.Team2Towers, SG.Team1Inhibitors, SG.Team2Inhibitors, "
             "SG.Team1Dragons, SG.Team2Dragons, SG.Team1Barons, SG.Team2Barons, "
             "SG.Team1RiftHeralds, SG.Team2RiftHeralds, SG.Team1VoidGrubs, SG.Team2VoidGrubs",
-        where=f"(MS.Team1='{team_name}' OR MS.Team2='{team_name}') AND MS.DateTime_UTC < '{match_datetime}'",
+        where=
+            f"(MS.Team1='{team_name}' OR MS.Team2='{team_name}') AND "
+            f"MS.DateTime_UTC < '{match_datetime}'",
         order_by="SG.DateTime_UTC DESC",
         limit=HISTORY_LENGTH,
     )
@@ -226,8 +229,7 @@ def get_player_stats(client: EsportsClient, team_name: str, match_datetime: str 
         tables="MatchSchedule=MS, ScoreboardPlayers=SP",
         join_on="MS.MatchId=SP.MatchId",
         fields=
-            "SP.DateTime_UTC, SP.Tournament, MS.MatchId, "
-            "SP.Team, SP.Name, SP.Role, "
+            "SP.Name, SP.Role, "
             "SP.Kills, SP.Deaths, SP.Assists, "
             "SP.Gold, SP.CS, SP.DamageToChampions",
         where=
@@ -235,7 +237,7 @@ def get_player_stats(client: EsportsClient, team_name: str, match_datetime: str 
             f"MS.DateTime_UTC < '{match_datetime}' AND "
             f"SP.Team='{team_name}'",
         order_by="SP.DateTime_UTC DESC",
-        limit=HISTORY_LENGTH*5,
+        limit=HISTORY_LENGTH*PLAYERS_PER_TEAM,
     )
 
     stats = {}
