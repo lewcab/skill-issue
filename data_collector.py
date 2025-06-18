@@ -78,7 +78,12 @@ def get_matches(client: EsportsClient, tournaments: list[str]) -> int:
     for tournament in tournaments:
         data = []
         matches = get_tournament_matches(client, tournament)
-        print(f"Found {len(matches)} matches for tournament: {tournament}")
+        if len(matches) == 0:
+            print(f"No matches found for tournament: {tournament}")
+            sleep(2)    # Rate limiting to avoid hitting API limits
+            continue
+        else:
+            print(f"Found {len(matches)} matches for tournament: {tournament}")
         for m in matches:
             team_1 = m['Team1']
             team_2 = m['Team2']
