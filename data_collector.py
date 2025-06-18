@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from time import sleep, time
 from typing import Callable
 
+from mwclient import APIError
 from mwrogue.esports_client import EsportsClient
 from numpy import array
 
@@ -92,56 +93,91 @@ def get_matches(client: EsportsClient, tournaments: list[str]) -> int:
             print("+-----------------------------------------------------------------+")
             print(f"Processing match: {team_1} vs {team_2} at {match_datetime}")
             try:
-                # Fetch team stats
-                sleep(2)    # Rate limiting to avoid hitting API limits
-                team_1_stats = get_team_stats(client, team_1, match_datetime)
-                team_2_stats = get_team_stats(client, team_2, match_datetime)
-                if len(team_1_stats) == 0 or len(team_2_stats) == 0:
-                    print(f"Skipping match {team_1} vs {team_2} due to missing team stats.")
-                    continue
+                match_data = get_stats(
+                    client,
+                    tournament, m['MatchId'], m['Winner'],
+                    team_1, team_2, match_datetime
+                )
+            except APIError as e:
+                if e.code == 'ratelimited':
+                    sleep(30)   # Wait for a while before retrying
+                match_data = get_stats(
+                    client,
+                    tournament, m['MatchId'], m['Winner'],
+                    team_1, team_2, match_datetime
+                )   # If this fails, it will raise an error and stop the script
 
-                # Fetch player stats
-                sleep(2)    # Rate limiting to avoid hitting API limits
-                team_1_player_stats = get_player_stats(client, team_1, match_datetime)
-                team_2_player_stats = get_player_stats(client, team_2, match_datetime)
-                if len(team_1_player_stats) == 0 or len(team_2_player_stats) == 0:
-                    print(f"Skipping match {team_1} vs {team_2} due to missing player stats.")
-                    continue
-
-            except Exception as e:
-                print(f"Error fetching stats for match {team_1} vs {team_2}: {e}")
+            if len(match_data) == 0:
                 continue
-
-            match_data = {
-                'MatchId': m['MatchId'],
-                'Tournament': tournament,
-                'DateTime_UTC': match_datetime,
-                'Winner': int(m['Winner']),
-                'Team1': team_1,
-                'Team2': team_2,
-            }
-            for stat, val in team_1_stats.items():
-                match_data[f'Team1_{stat}'] = val
-            for stat, val in team_2_stats.items():
-                match_data[f'Team2_{stat}'] = val
-            for stat, val in team_1_player_stats.items():
-                match_data[f'Team1_{stat}'] = val
-            for stat, val in team_2_player_stats.items():
-                match_data[f'Team2_{stat}'] = val
 
             data.append(match_data)
 
-            print(f"\nTeam 1 stats in past {HISTORY_LENGTH} games:\n{team_1_stats}")
-            print(f"\tPlayer stats:\n{team_1_player_stats}\n")
-            print(f"Team 2 stats in past {HISTORY_LENGTH} games:\n{team_2_stats}")
-            print(f"\tPlayer stats:\n{team_2_player_stats}\n")
+            print(f"\nTeam 1 ({match_data['Team1']}) stats in past {HISTORY_LENGTH} games:")
+            for key, value in match_data.items():
+                if key.startswith('Team1_'):
+                    print(f"{key}: {value:.2f}", end=', ')
+            print("\n")
+            print(f"Team 2 ({match_data['Team2']}) stats in past {HISTORY_LENGTH} games:")
+            for key, value in match_data.items():
+                if key.startswith('Team2_'):
+                    print(f"{key}: {value:.2f}", end=', ')
+            print("\n")
 
         count += len(matches)
-        print(f"Finished processing {count} matches for tournament: {tournament}")
+        print(f"Finished processing for tournament: {tournament}\n")
         write_to_csv(data)
 
     return count
 
+
+def get_stats(
+        client: EsportsClient,
+        tournament: str, match_id: str, winner: str,
+        team_1: str, team_2: str, match_datetime: str
+) -> dict:
+    try:
+        # Fetch team stats
+        sleep(2)  # Rate limiting to avoid hitting API limits
+        team_1_stats = get_team_stats(client, team_1, match_datetime)
+        team_2_stats = get_team_stats(client, team_2, match_datetime)
+        if len(team_1_stats) == 0 or len(team_2_stats) == 0:
+            print(f"Skipping match {team_1} vs {team_2} due to missing team stats.")
+            return {}
+
+        # Fetch player stats
+        sleep(2)  # Rate limiting to avoid hitting API limits
+        team_1_player_stats = get_player_stats(client, team_1, match_datetime)
+        team_2_player_stats = get_player_stats(client, team_2, match_datetime)
+        if len(team_1_player_stats) == 0 or len(team_2_player_stats) == 0:
+            print(f"Skipping match {team_1} vs {team_2} due to missing player stats.")
+            return {}
+
+    except APIError as e:
+        print(f"APIError fetching stats for match {team_1} vs {team_2}: {e}")
+        raise e
+
+    except Exception as e:
+        print(f"Error fetching stats for match {team_1} vs {team_2}: {e}")
+        return {}
+
+    match_data = {
+        'MatchId': match_id,
+        'Tournament': tournament,
+        'DateTime_UTC': match_datetime,
+        'Winner': int(winner),
+        'Team1': team_1,
+        'Team2': team_2,
+    }
+    for stat, val in team_1_stats.items():
+        match_data[f'Team1_{stat}'] = val
+    for stat, val in team_2_stats.items():
+        match_data[f'Team2_{stat}'] = val
+    for stat, val in team_1_player_stats.items():
+        match_data[f'Team1_{stat}'] = val
+    for stat, val in team_2_player_stats.items():
+        match_data[f'Team2_{stat}'] = val
+
+    return match_data
 
 def get_tournament_matches(client: EsportsClient, tournament: str) -> array:
     """
