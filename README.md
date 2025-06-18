@@ -26,3 +26,6 @@ python main.py
 
 Below are a some APIs and databases used, as well as some links to documentation and guides.
 * [Leaguepedia API](https://lol.fandom.com/wiki/Help:Leaguepedia_API)
+* [scikit-learn](https://scikit-learn.org/stable/index.html)
+  * [GradientBoostingClassifier](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.GradientBoostingClassifier.html)
+  * [MLPClassifier](https://scikit-learn.org/stable/modules/generated/sklearn.neural_network.MLPClassifier.html#sklearn.neural_network.MLPClassifier)

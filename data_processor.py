@@ -18,6 +18,7 @@ COLUMNS_IGNORE = [
     'Team2',
 ]
 
+
 class DataProcessor:
     def __init__(self, filenames: list[str], train_ratio: float = 0.8) -> None:
         """
@@ -47,11 +48,14 @@ class DataProcessor:
             reader = csv.DictReader(csvfile)
             for row in reader:
                 # Extract features (all columns except 'Winner')
-                features = [
+                row = [
                     float(value) for key, value in row.items()
                     if key not in COLUMNS_IGNORE
                 ]
-                raw_data.append(features)
+                # TODO: temp fix for matches with odd data...
+                if row[-1] == 0:  # Ensure the last feature is not zero
+                    continue
+                raw_data.append(row)
 
         raw_data = np.array(raw_data)
         np.random.shuffle(raw_data)

@@ -1,11 +1,9 @@
-# General Imports
-import matplotlib.pyplot as plt
-import numpy as np
-import requests
+"""
+Main script for training and evaluating machine learning models on match data.
+"""
 
-# scikit-learn Imports
-from sklearn.neural_network import MLPClassifier
 from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.neural_network import MLPClassifier
 
 from data_processor import DataProcessor
 
@@ -26,12 +24,15 @@ def main():
 
     # Setting up the Gradient Boosting Classifier
     gbc = GradientBoostingClassifier(
-        n_estimators=250,
-        learning_rate=0.1,
+        n_estimators=300,
+        learning_rate=0.08,
         max_depth=4,
     )
 
+    # Fit the model to the training data
     gbc.fit(data.x_train, data.y_train)
+
+    # Score/test the model on the training and testing data
     print("Gradient Boosting Classifier trained.", end='\n\n')
     print("Training score:", gbc.score(data.x_train, data.y_train))
     print("Testing score:", gbc.score(data.x_test, data.y_test), end='\n\n')
@@ -43,8 +44,11 @@ def main():
         solver='adam',
         max_iter=500,
     )
+
+    # Fit the model to the training data
     mlp.fit(data.x_train, data.y_train)
 
+    # Score/test the model on the training and testing data
     print("Multi-layer Perceptron Classifier trained.", end='\n\n')
     print("Training score:", mlp.score(data.x_train, data.y_train))
     print("Testing score:", mlp.score(data.x_test, data.y_test), end='\n\n')
