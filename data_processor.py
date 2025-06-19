@@ -5,18 +5,11 @@ and processes it into numpy arrays for training machine learning models.
 """
 
 import csv
-import numpy as np
 
+import numpy as np
 from numpy import array
 
-# Constants
-COLUMNS_IGNORE = [
-    'MatchId',
-    'Tournament',
-    'DateTime_UTC',
-    'Team1',
-    'Team2',
-]
+from constants import COLUMNS_IGNORE, SEED
 
 
 class DataProcessor:
@@ -58,6 +51,7 @@ class DataProcessor:
                 raw_data.append(row)
 
         raw_data = np.array(raw_data)
+        np.random.seed(SEED)
         np.random.shuffle(raw_data)
 
         # Split data into features (x) and outcomes (y)

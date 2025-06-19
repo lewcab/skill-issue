@@ -5,6 +5,7 @@ Main script for training and evaluating machine learning models on match data.
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.neural_network import MLPClassifier
 
+from constants import SEED
 from data_processor import DataProcessor
 
 
@@ -24,9 +25,12 @@ def main():
 
     # Setting up the Gradient Boosting Classifier
     gbc = GradientBoostingClassifier(
-        n_estimators=300,
-        learning_rate=0.08,
-        max_depth=4,
+        n_estimators=500,
+        learning_rate=0.05,
+        max_depth=6,
+        subsample=0.8,
+        max_features='sqrt',
+        random_state=SEED,
     )
 
     # Fit the model to the training data
@@ -39,10 +43,16 @@ def main():
 
     # Setting up the Multi-layer Perceptron Classifier
     mlp = MLPClassifier(
-        hidden_layer_sizes=(100, 50),
+        hidden_layer_sizes=(128, 64),
         activation='relu',
         solver='adam',
-        max_iter=500,
+        alpha=1e-4,
+        batch_size=64,
+        learning_rate='adaptive',
+        learning_rate_init=0.001,
+        max_iter=300,
+        early_stopping=True,
+        random_state=SEED,
     )
 
     # Fit the model to the training data

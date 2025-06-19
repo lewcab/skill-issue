@@ -13,10 +13,7 @@ from mwclient import APIError
 from mwrogue.esports_client import EsportsClient
 from numpy import array
 
-# Definitions
-HISTORY_LENGTH = 10     # Number of past matches to consider for team statistics
-PLAYERS_PER_TEAM = 5
-OUTPUT_NAME = f"data/{datetime.now().strftime('%y%m%d_%H%M%S')}-match_data.csv"
+from constants import HISTORY_LENGTH, PLAYERS_PER_TEAM, OUTPUT_NAME
 
 
 def main():
@@ -95,16 +92,16 @@ def get_matches(client: EsportsClient, tournaments: list[str]) -> int:
             try:
                 match_data = get_stats(
                     client,
-                    tournament, m['MatchId'], m['Winner'],
-                    team_1, team_2, match_datetime
+                    team_1, team_2, match_datetime,
+                    tournament, m['MatchId'], m['Winner']
                 )
             except APIError as e:
                 if e.code == 'ratelimited':
                     sleep(30)   # Wait for a while before retrying
                 match_data = get_stats(
                     client,
-                    tournament, m['MatchId'], m['Winner'],
-                    team_1, team_2, match_datetime
+                    team_1, team_2, match_datetime,
+                    tournament, m['MatchId'], m['Winner']
                 )   # If this fails, it will raise an error and stop the script
 
             if len(match_data) == 0:
@@ -132,9 +129,12 @@ def get_matches(client: EsportsClient, tournaments: list[str]) -> int:
 
 def get_stats(
         client: EsportsClient,
-        tournament: str, match_id: str, winner: str,
-        team_1: str, team_2: str, match_datetime: str
+        team_1: str, team_2: str, match_datetime: str = None,
+        tournament: str = None, match_id: str = None, winner: str = -1
 ) -> dict:
+    if match_datetime is None:
+        match_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     try:
         # Fetch team stats
         sleep(2)  # Rate limiting to avoid hitting API limits
