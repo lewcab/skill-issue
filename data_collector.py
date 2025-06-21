@@ -179,6 +179,7 @@ def get_stats(
 
     return match_data
 
+
 def get_tournament_matches(client: EsportsClient, tournament: str) -> array:
     """
     Fetches all matches for a specific tournament.
@@ -194,6 +195,7 @@ def get_tournament_matches(client: EsportsClient, tournament: str) -> array:
     )
 
     return array(data)
+
 
 def get_team_stats(client: EsportsClient, team_name: str, match_datetime: str) -> dict:
     """
@@ -233,21 +235,25 @@ def get_team_stats(client: EsportsClient, team_name: str, match_datetime: str) -
         else:
             team = 'Team2'
 
-        game_length = get_stat(match, 'Gamelength Number', float, 1)
-
-        # Aggregate statistics
-        stats['win'] = stats.get('win', 0) + (1 if match['WinTeam'] == team_name else 0)
-        stats['game_length'] = stats.get('game_length', 0) + game_length
-        stats['gold'] = stats.get('gold', 0) + get_stat(match, f"{team}Gold", int)
-        stats['kills'] = stats.get('kills', 0) + get_stat(match, f"{team}Kills", int)
-        stats['dragons'] = stats.get('dragons', 0) + get_stat(match, f"{team}Dragons", int)
-        stats['barons'] = stats.get('barons', 0) + get_stat(match, f"{team}Barons", int)
-        stats['towers'] = stats.get('towers', 0) + get_stat(match, f"{team}Towers", int)
-        stats['inhibitors'] = stats.get('inhibitors', 0) + get_stat(match, f"{team}Inhibitors", int)
-        stats['heralds'] = stats.get('heralds', 0) + get_stat(match, f"{team}RiftHeralds", int)
-        stats['grubs'] = stats.get('grubs', 0) + get_stat(match, f"{team}VoidGrubs", int)
-        stats['gpm'] = stats.get('gpm', 0) + (get_stat(match, f"{team}Gold", int) / game_length)
-        stats['kpm'] = stats.get('kpm', 0) + (get_stat(match, f"{team}Kills", int) / game_length)
+        try:
+            game_length = float(match.get('Gamelength Number'))
+            stats['win'] = stats.get('win', 0) + (1 if match['WinTeam'] == team_name else 0)
+            stats['game_length'] = stats.get('game_length', 0) + game_length
+            stats['gold'] = stats.get('gold', 0) + int(match.get(f"{team}Gold"))
+            stats['kills'] = stats.get('kills', 0) + int(match.get(f"{team}Kills"))
+            stats['dragons'] = stats.get('dragons', 0) + int(match.get(f"{team}Dragons"))
+            stats['barons'] = stats.get('barons', 0) + int(match.get(f"{team}Barons"))
+            stats['towers'] = stats.get('towers', 0) + int(match.get(f"{team}Towers"))
+            stats['inhibitors'] = stats.get('inhibitors', 0) + int(match.get(f"{team}Inhibitors"))
+            stats['heralds'] = stats.get('heralds', 0) + int(match.get(f"{team}RiftHeralds"))
+            stats['grubs'] = stats.get('grubs', 0) + int(match.get(f"{team}VoidGrubs"))
+            stats['gpm'] = stats.get('gpm', 0) + int(match.get(f"{team}Gold")) / game_length
+            stats['kpm'] = stats.get('kpm', 0) + int(match.get(f"{team}Kills")) / game_length
+        except Exception as e:
+            print(f"Error processing match {i+1}/{len(data)} for team '{team_name}': {e}")
+            for d in data:
+                print(d)
+            return {}
 
         count += 1
 
@@ -285,13 +291,19 @@ def get_player_stats(client: EsportsClient, team_name: str, match_datetime: str 
     for match in data:
         role = match['Role']
 
-        stats[f"{role}_count"] = stats.get(f"{role}_count", 0) + 1
-        stats[f"{role}_kills"] = stats.get(f"{role}_kills", 0) + get_stat(match, 'Kills', int)
-        stats[f"{role}_deaths"] = stats.get(f"{role}_deaths", 0) + get_stat(match, 'Deaths', int)
-        stats[f"{role}_assists"] = stats.get(f"{role}_assists", 0) + get_stat(match, 'Assists', int)
-        stats[f"{role}_gold"] = stats.get(f"{role}_gold", 0) + get_stat(match, 'Gold', int)
-        stats[f"{role}_cs"] = stats.get(f"{role}_cs", 0) + get_stat(match, 'CS', int)
-        stats[f"{role}_dmg"] = stats.get(f"{role}_dmg", 0) + get_stat(match, 'DamageToChampions', int)
+        try:
+            stats[f"{role}_count"] = stats.get(f"{role}_count", 0) + 1
+            stats[f"{role}_kills"] = stats.get(f"{role}_kills", 0) + int(match.get("Kills"))
+            stats[f"{role}_deaths"] = stats.get(f"{role}_deaths", 0) + int(match.get("Deaths"))
+            stats[f"{role}_assists"] = stats.get(f"{role}_assists", 0) + int(match.get("Assists"))
+            stats[f"{role}_gold"] = stats.get(f"{role}_gold", 0) + int(match.get("Gold"))
+            stats[f"{role}_cs"] = stats.get(f"{role}_cs", 0) + int(match.get("CS"))
+            stats[f"{role}_dmg"] = stats.get(f"{role}_dmg", 0) + int(match.get("DamageToChampions"))
+        except Exception as e:
+            print(f"Error processing player stats: {e}")
+            for d in data:
+                print(d)
+            return {}
 
     # Verify data
     roles = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
@@ -309,11 +321,6 @@ def get_player_stats(client: EsportsClient, team_name: str, match_datetime: str 
     averages = {k: v / HISTORY_LENGTH for k, v in stats.items()}
 
     return averages
-
-
-def get_stat(match: dict, stat: str, cast: Callable, fallback: float = 0.0):
-    stat = match.get(stat)
-    return cast(stat) if stat is not None else fallback
 
 
 def offset_datetime(dt: str, hours: int = -6) -> datetime:
