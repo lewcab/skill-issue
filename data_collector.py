@@ -251,8 +251,6 @@ def get_team_stats(client: EsportsClient, team_name: str, match_datetime: str) -
             stats['kpm'] = stats.get('kpm', 0) + int(match.get(f"{team}Kills")) / game_length
         except Exception as e:
             print(f"Error processing match {i+1}/{len(data)} for team '{team_name}': {e}")
-            for d in data:
-                print(d)
             return {}
 
         count += 1
@@ -301,8 +299,6 @@ def get_player_stats(client: EsportsClient, team_name: str, match_datetime: str 
             stats[f"{role}_dmg"] = stats.get(f"{role}_dmg", 0) + int(match.get("DamageToChampions"))
         except Exception as e:
             print(f"Error processing player stats: {e}")
-            for d in data:
-                print(d)
             return {}
 
     # Verify data
