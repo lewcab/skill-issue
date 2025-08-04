@@ -3,3 +3,9 @@
 
 # Virtual environment
 venv/
+__pycache__/
+models/__pycache__/
+
+# Training data
+data/*
+!data/match-data.csv

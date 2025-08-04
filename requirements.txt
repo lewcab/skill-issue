@@ -1,5 +1,7 @@
 matplotlib==3.10.3
+mwclient==0.11.0
 mwrogue==0.1.5
-numpy==2.2.6
+pandas==2.3.0
+pygad==3.4.0
 requests==2.32.3
 scikit-learn==1.6.1
